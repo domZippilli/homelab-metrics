@@ -8,6 +8,7 @@ from typing import Any, Iterable
 
 
 HELP = {
+    "homelab_scrape_duration_seconds": "Duration of the last combined homelab metrics scrape.",
     "unifi_up": "Whether the last UniFi API scrape succeeded.",
     "unifi_scrape_duration_seconds": "Duration of the last UniFi API scrape.",
     "unifi_scrape_error": "Scrape error information, labeled by error type.",
@@ -19,6 +20,11 @@ HELP = {
     "unifi_pdu_outlet_current_amps": "UniFi PDU outlet current draw.",
     "unifi_pdu_outlet_voltage_volts": "UniFi PDU outlet voltage.",
     "unifi_pdu_outlet_power_factor": "UniFi PDU outlet power factor.",
+    "ecoflow_up": "Whether the last EcoFlow API scrape succeeded.",
+    "ecoflow_scrape_duration_seconds": "Duration of the last EcoFlow API scrape.",
+    "ecoflow_scrape_error": "EcoFlow scrape error information, labeled by error type.",
+    "ecoflow_device_info": "EcoFlow device information.",
+    "ecoflow_device_online": "Whether the EcoFlow device is online.",
 }
 
 DEVICE_FIELD_ALIASES = {
@@ -159,10 +165,6 @@ def render_prometheus(
     duration_seconds: float,
     error: Exception | None = None,
 ) -> str:
-    lines: list[str] = []
-    seen: set[str] = set()
-    seen_series: set[tuple[str, tuple[tuple[str, str], ...]]] = set()
-
     base_samples = [
         Sample("unifi_up", {}, 1.0 if up else 0.0),
         Sample("unifi_scrape_duration_seconds", {}, duration_seconds),
@@ -176,13 +178,21 @@ def render_prometheus(
             )
         )
 
-    for sample in [*base_samples, *samples]:
+    return render_samples([*base_samples, *samples])
+
+
+def render_samples(samples: Iterable[Sample]) -> str:
+    lines: list[str] = []
+    seen: set[str] = set()
+    seen_series: set[tuple[str, tuple[tuple[str, str], ...]]] = set()
+
+    for sample in samples:
         series_key = (sample.name, tuple(sorted(sample.labels.items())))
         if series_key in seen_series:
             continue
         seen_series.add(series_key)
         if sample.name not in seen:
-            help_text = HELP.get(sample.name, f"UniFi metric derived from field {sample.name}.")
+            help_text = HELP.get(sample.name, f"Metric derived from source field {sample.name}.")
             lines.append(f"# HELP {sample.name} {help_text}")
             lines.append(f"# TYPE {sample.name} gauge")
             seen.add(sample.name)

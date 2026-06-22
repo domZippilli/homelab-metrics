@@ -1,5 +1,9 @@
 import unittest
+from unittest.mock import patch
 
+from unifi_metrics.config import Config
+from unifi_metrics.ecoflow_client import flatten, sign_text, signature_text
+from unifi_metrics.ecoflow_metrics import collect_ecoflow_samples
 from unifi_metrics.exporter import Handler, redact
 from unifi_metrics.metrics import collect_pdu_samples, render_prometheus
 
@@ -98,6 +102,94 @@ class MetricsTest(unittest.TestCase):
 
     def test_known_routes_ignore_query_string(self) -> None:
         self.assertEqual(Handler._route("/metrics?x=1"), "/metrics")
+
+    def test_collects_ecoflow_quota_numbers(self) -> None:
+        samples = collect_ecoflow_samples(
+            [
+                {
+                    "sn": "ABC123",
+                    "deviceName": "Delta Pro",
+                    "productName": "DELTA Pro",
+                    "online": True,
+                }
+            ],
+            {
+                "ABC123": {
+                    "soc": "87",
+                    "wattsOutSum": 123.4,
+                    "nested": {"temp": "31.5"},
+                    "enBeep": True,
+                }
+            },
+        )
+        names = {sample.name for sample in samples}
+        self.assertIn("ecoflow_device_info", names)
+        self.assertIn("ecoflow_device_online", names)
+        self.assertIn("ecoflow_quota_soc", names)
+        self.assertIn("ecoflow_quota_wattsoutsum", names)
+        self.assertIn("ecoflow_quota_nested_temp", names)
+        self.assertIn("ecoflow_quota_enbeep", names)
+
+    def test_collects_delta_pro_3_curated_metrics(self) -> None:
+        samples = collect_ecoflow_samples(
+            [
+                {
+                    "sn": "MR51ZAS5PGCA0561",
+                    "productName": "DELTA Pro 3",
+                    "online": 1,
+                }
+            ],
+            {
+                "MR51ZAS5PGCA0561": {
+                    "cmsBattSoc": 98.5,
+                    "powInSumW": 100,
+                    "powOutSumW": 50,
+                    "enBeep": False,
+                }
+            },
+        )
+        values = {sample.name: sample.value for sample in samples}
+        self.assertEqual(values["ecoflow_delta_pro_3_battery_soc_percent"], 98.5)
+        self.assertEqual(values["ecoflow_delta_pro_3_input_power_watts"], 100)
+        self.assertEqual(values["ecoflow_delta_pro_3_output_power_watts"], 50)
+        self.assertEqual(values["ecoflow_delta_pro_3_beeper_enabled"], 0)
+
+    def test_ecoflow_flatten_uses_dotted_keys_for_signing(self) -> None:
+        self.assertEqual(flatten({"a": {"b": 1}, "c": [True]}), {"a.b": "1", "c[0]": "True"})
+
+    def test_ecoflow_signature_matches_documentation_example(self) -> None:
+        text = signature_text(
+            {
+                "params.cmdSet": "11",
+                "params.eps": "0",
+                "params.id": "24",
+                "sn": "123456789",
+            },
+            "Fp4SvIprYSDPXtYJidEtUAd1o",
+            "345164",
+            "1671171709428",
+        )
+        self.assertEqual(
+            text,
+            "params.cmdSet=11&params.eps=0&params.id=24&sn=123456789&"
+            "accessKey=Fp4SvIprYSDPXtYJidEtUAd1o&nonce=345164&timestamp=1671171709428",
+        )
+        self.assertEqual(
+            sign_text(text, "WIbFEKre0s6sLnh4ei7SPUeYnptHG6V"),
+            "07c13b65e037faf3b153d51613638fa80003c4c38d2407379a7f52851af1473e",
+        )
+
+    def test_config_allows_ecoflow_without_unifi(self) -> None:
+        env = {
+            "ECOFLOW_ACCESS_KEY": "access",
+            "ECOFLOW_SECRET_KEY": "secret",
+            "ECOFLOW_DEVICE_SNS": "abc, def",
+        }
+        with patch("unifi_metrics.config.load_dotenv"), patch.dict("os.environ", env, clear=True):
+            config = Config.from_env()
+        self.assertFalse(config.unifi_enabled)
+        self.assertTrue(config.ecoflow_enabled)
+        self.assertEqual(config.ecoflow_device_sns, ("abc", "def"))
 
 
 if __name__ == "__main__":

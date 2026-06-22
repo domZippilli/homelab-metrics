@@ -1,7 +1,10 @@
-# unifi-metrics
+# homelab-metrics
 
-A small Prometheus exporter for UniFi OS devices, initially aimed at UDM Pro
-setups with UniFi SmartPower / PDU devices.
+A small Prometheus exporter for homelab devices, currently supporting:
+
+- UniFi OS / Network device metrics, initially aimed at UDM Pro setups with
+  UniFi SmartPower / PDU devices.
+- EcoFlow cloud API device quota metrics.
 
 UniFi's local API is not formally stable. This exporter uses the local UniFi OS
 login flow and the Network application proxy endpoints, then exports numeric PDU
@@ -15,17 +18,46 @@ with the least privileges that can read Network devices.
 
 ## Configuration
 
-Set these environment variables:
+Set environment variables for at least one source.
+
+### UniFi
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `UNIFI_HOST` | required | UDM/UniFi OS host, for example `https://192.168.1.1` |
-| `UNIFI_USERNAME` | required | Local UniFi OS username |
-| `UNIFI_PASSWORD` | required | Local UniFi OS password |
+| `UNIFI_HOST` | optional | UDM/UniFi OS host, for example `https://192.168.1.1` |
+| `UNIFI_USERNAME` | optional | Local UniFi OS username |
+| `UNIFI_PASSWORD` | optional | Local UniFi OS password |
 | `UNIFI_SITE` | `default` | Network site id |
 | `UNIFI_VERIFY_SSL` | `false` | Verify TLS certificates |
 | `UNIFI_TIMEOUT_SECONDS` | `15` | API timeout |
 | `UNIFI_PDU_FILTER` | `pdu|usp-pdu|smartpower|power strip|outlet` | Regex used against model/name/type |
+
+### EcoFlow
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `ECOFLOW_ACCESS_KEY` | optional | EcoFlow developer access key |
+| `ECOFLOW_SECRET_KEY` | optional | EcoFlow developer secret key |
+| `ECOFLOW_HOST` | `https://api.ecoflow.com` | EcoFlow API host |
+| `ECOFLOW_DEVICE_SNS` | all devices | Optional comma-separated serial numbers to scrape |
+| `ECOFLOW_TIMEOUT_SECONDS` | `15` | API timeout |
+
+For this setup, the Delta Pro 3 serial is `MR51ZAS5PGCA0561`. Set:
+
+```sh
+ECOFLOW_DEVICE_SNS=MR51ZAS5PGCA0561
+```
+
+Delta Pro 3 quota fields are exported with curated names for the documented
+fields, for example `ecoflow_delta_pro_3_battery_soc_percent`,
+`ecoflow_delta_pro_3_input_power_watts`, and
+`ecoflow_delta_pro_3_output_power_watts`. Unknown quota fields still use the
+generic `ecoflow_quota_*` fallback.
+
+### Exporter
+
+| Variable | Default | Description |
+| --- | --- | --- |
 | `EXPORTER_ADDR` | `0.0.0.0` | HTTP bind address |
 | `EXPORTER_PORT` | `9130` | HTTP port |
 | `SCRAPE_TTL_SECONDS` | `20` | Cache UniFi API results for this many seconds |
@@ -44,12 +76,13 @@ The exporter serves:
 - `GET /metrics` for Prometheus.
 - `GET /healthz` for a simple health check.
 - `GET /debug/devices` for a redacted JSON view of devices matched as PDUs.
+- `GET /debug/ecoflow` for a redacted JSON view of EcoFlow devices and quotas.
 
 ## Prometheus scrape config
 
 ```yaml
 scrape_configs:
-  - job_name: unifi_metrics
+  - job_name: homelab_metrics
     static_configs:
       - targets: ["localhost:9130"]
 ```
@@ -57,8 +90,8 @@ scrape_configs:
 ## Docker
 
 ```sh
-docker build -t unifi-metrics .
-docker run --rm --env-file .env -p 9130:9130 unifi-metrics
+docker build -t homelab-metrics .
+docker run --rm --env-file .env -p 9130:9130 homelab-metrics
 ```
 
 ## Test

@@ -1,9 +1,8 @@
 [project]
-name = "unifi-metrics"
+name = "homelab-metrics"
 version = "0.1.0"
-description = "Prometheus exporter for UniFi local metrics"
+description = "Prometheus exporter for homelab metrics"
 requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-
