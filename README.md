@@ -5,6 +5,7 @@ A small Prometheus exporter for homelab devices, currently supporting:
 - UniFi OS / Network device metrics, initially aimed at UDM Pro setups with
   UniFi SmartPower / PDU devices.
 - EcoFlow cloud API device quota metrics.
+- ZFS pool status and scrub metrics from `zpool status`.
 
 UniFi's local API is not formally stable. This exporter uses the local UniFi OS
 login flow and the Network application proxy endpoints, then exports numeric PDU
@@ -55,6 +56,16 @@ fields, for example `ecoflow_delta_pro_3_battery_soc_percent`,
 generic `ecoflow_quota_*` fallback.
 
 ### Exporter
+
+### ZFS
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `ZFS_ENABLED` | `false` | Enable ZFS status scraping with `zpool` |
+| `ZFS_POOLS` | all pools | Optional comma-separated pool names |
+
+The exporter shells out to `zpool list` and `zpool status -p`. If running in a
+container, the container needs access to ZFS tooling and host ZFS state.
 
 | Variable | Default | Description |
 | --- | --- | --- |

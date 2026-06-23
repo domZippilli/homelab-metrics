@@ -14,6 +14,7 @@ from .ecoflow_client import EcoFlowClient
 from .ecoflow_metrics import collect_ecoflow_samples, serial_from_device
 from .metrics import Sample, collect_pdu_samples, pdu_devices, render_samples
 from .unifi_metrics import collect_unifi_device_samples
+from .zfs_status import collect_zfs_status_samples
 
 
 LOG = logging.getLogger("unifi_metrics")
@@ -63,6 +64,8 @@ class ScrapeCache:
             samples.extend(self._scrape_unifi(errors))
         if self.ecoflow_client:
             samples.extend(self._scrape_ecoflow(errors))
+        if self.config.zfs_enabled:
+            samples.extend(self._scrape_zfs(errors))
         self._duration = time.monotonic() - started
         samples.append(Sample("homelab_scrape_duration_seconds", {}, self._duration))
         self._samples = samples
@@ -122,6 +125,26 @@ class ScrapeCache:
                 Sample("ecoflow_scrape_duration_seconds", {}, time.monotonic() - started),
                 Sample(
                     "ecoflow_scrape_error",
+                    {"type": exc.__class__.__name__, "message": str(exc)[:160]},
+                    1.0,
+                ),
+            ]
+
+    def _scrape_zfs(self, errors: dict[str, Exception]) -> list[Sample]:
+        started = time.monotonic()
+        try:
+            samples = collect_zfs_status_samples(self.config.zfs_pools)
+            samples.append(Sample("homelab_zfs_up", {}, 1.0))
+            samples.append(Sample("homelab_zfs_scrape_duration_seconds", {}, time.monotonic() - started))
+            return samples
+        except Exception as exc:
+            LOG.warning("ZFS status scrape failed: %s", exc)
+            errors["zfs"] = exc
+            return [
+                Sample("homelab_zfs_up", {}, 0.0),
+                Sample("homelab_zfs_scrape_duration_seconds", {}, time.monotonic() - started),
+                Sample(
+                    "homelab_zfs_scrape_error",
                     {"type": exc.__class__.__name__, "message": str(exc)[:160]},
                     1.0,
                 ),

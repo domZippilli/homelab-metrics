@@ -33,6 +33,18 @@ HELP = {
     "ecoflow_scrape_error": "EcoFlow scrape error information, labeled by error type.",
     "ecoflow_device_info": "EcoFlow device information.",
     "ecoflow_device_online": "Whether the EcoFlow device is online.",
+    "homelab_zfs_up": "Whether the last ZFS status scrape succeeded.",
+    "homelab_zfs_scrape_duration_seconds": "Duration of the last ZFS status scrape.",
+    "homelab_zfs_scrape_error": "ZFS status scrape error information, labeled by error type.",
+    "homelab_zfs_scrub_repaired_bytes": "Bytes repaired during the most recent ZFS scrub.",
+    "homelab_zfs_scrub_errors": "Errors reported by the most recent ZFS scrub.",
+    "homelab_zfs_scrub_duration_seconds": "Duration of the most recent ZFS scrub.",
+    "homelab_zfs_scrub_end_timestamp_seconds": "Unix timestamp when the most recent ZFS scrub finished.",
+    "homelab_zfs_scrub_status": "Most recent ZFS scan status, labeled by status text.",
+    "homelab_zfs_data_errors": "Whether zpool status reports known data errors.",
+    "homelab_zfs_vdev_read_errors": "Read errors reported by zpool status for a pool or vdev.",
+    "homelab_zfs_vdev_write_errors": "Write errors reported by zpool status for a pool or vdev.",
+    "homelab_zfs_vdev_checksum_errors": "Checksum errors reported by zpool status for a pool or vdev.",
 }
 
 DEVICE_FIELD_ALIASES = {

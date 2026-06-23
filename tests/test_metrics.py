@@ -7,6 +7,7 @@ from unifi_metrics.ecoflow_metrics import collect_ecoflow_samples
 from unifi_metrics.exporter import Handler, redact
 from unifi_metrics.metrics import collect_pdu_samples, render_prometheus
 from unifi_metrics.unifi_metrics import collect_unifi_device_samples
+from unifi_metrics.zfs_status import parse_zpool_status
 
 
 class MetricsTest(unittest.TestCase):
@@ -191,6 +192,14 @@ class MetricsTest(unittest.TestCase):
         self.assertTrue(config.ecoflow_enabled)
         self.assertEqual(config.ecoflow_device_sns, ("abc", "def"))
 
+    def test_config_allows_zfs_without_unifi_or_ecoflow(self) -> None:
+        with patch("unifi_metrics.config.load_dotenv"), patch.dict(
+            "os.environ", {"ZFS_ENABLED": "true", "ZFS_POOLS": "tank, backup"}, clear=True
+        ):
+            config = Config.from_env()
+        self.assertTrue(config.zfs_enabled)
+        self.assertEqual(config.zfs_pools, ("tank", "backup"))
+
     def test_collects_curated_unifi_device_and_port_metrics(self) -> None:
         samples = collect_unifi_device_samples(
             [
@@ -279,6 +288,47 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(values["unifi_gateway_wan_latency_ms"], 4)
         self.assertEqual(values["unifi_ap_radio_channel_width_mhz"], 80)
         self.assertEqual(values["unifi_ap_vap_clients"], 7)
+
+    def test_parses_zpool_status_scrub_and_errors(self) -> None:
+        samples = parse_zpool_status(
+            """
+  pool: plex-pool
+ state: ONLINE
+  scan: scrub repaired 0B in 03:05:44 with 0 errors on Sun Jun  7 06:05:45 2026
+config:
+
+        NAME                                          STATE     READ WRITE CKSUM
+        plex-pool                                     ONLINE       0     0     0
+          raidz1-0                                    ONLINE       0     0     0
+            ata-WDC_WD30EFRX-68EUZN0_WD-WCC4N0NJJJHT  ONLINE       1     2     3
+
+errors: No known data errors
+"""
+        )
+        values = {(sample.name, sample.labels.get("vdev", "")): sample.value for sample in samples}
+        self.assertEqual(values[("homelab_zfs_scrub_repaired_bytes", "")], 0)
+        self.assertEqual(values[("homelab_zfs_scrub_errors", "")], 0)
+        self.assertEqual(values[("homelab_zfs_scrub_duration_seconds", "")], 11144)
+        self.assertEqual(values[("homelab_zfs_data_errors", "")], 0)
+        self.assertEqual(
+            values[("homelab_zfs_vdev_read_errors", "ata-WDC_WD30EFRX-68EUZN0_WD-WCC4N0NJJJHT")],
+            1,
+        )
+        self.assertEqual(
+            values[
+                ("homelab_zfs_vdev_write_errors", "ata-WDC_WD30EFRX-68EUZN0_WD-WCC4N0NJJJHT")
+            ],
+            2,
+        )
+        self.assertEqual(
+            values[
+                (
+                    "homelab_zfs_vdev_checksum_errors",
+                    "ata-WDC_WD30EFRX-68EUZN0_WD-WCC4N0NJJJHT",
+                )
+            ],
+            3,
+        )
 
 
 if __name__ == "__main__":

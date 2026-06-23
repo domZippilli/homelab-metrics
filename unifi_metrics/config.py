@@ -26,6 +26,8 @@ class Config:
     ecoflow_secret_key: str | None = None
     ecoflow_device_sns: tuple[str, ...] = ()
     ecoflow_timeout_seconds: float = 15.0
+    zfs_enabled: bool = False
+    zfs_pools: tuple[str, ...] = ()
     exporter_addr: str = "0.0.0.0"
     exporter_port: int = 9130
     scrape_ttl_seconds: float = 20.0
@@ -60,14 +62,14 @@ class Config:
             or None,
             ecoflow_device_sns=_csv_env("ECOFLOW_DEVICE_SNS"),
             ecoflow_timeout_seconds=float(os.getenv("ECOFLOW_TIMEOUT_SECONDS", "15")),
+            zfs_enabled=_bool_env("ZFS_ENABLED", False),
+            zfs_pools=_csv_env("ZFS_POOLS"),
             exporter_addr=os.getenv("EXPORTER_ADDR", "0.0.0.0"),
             exporter_port=int(os.getenv("EXPORTER_PORT", "9130")),
             scrape_ttl_seconds=float(os.getenv("SCRAPE_TTL_SECONDS", "20")),
         )
-        if not config.unifi_enabled and not config.ecoflow_enabled:
-            raise ValueError(
-                "configure at least one source: UniFi credentials or EcoFlow API credentials"
-            )
+        if not config.unifi_enabled and not config.ecoflow_enabled and not config.zfs_enabled:
+            raise ValueError("configure at least one source: UniFi, EcoFlow, or ZFS")
         return config
 
 
