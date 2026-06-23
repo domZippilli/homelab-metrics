@@ -6,6 +6,7 @@ from unifi_metrics.ecoflow_client import flatten, sign_text, signature_text
 from unifi_metrics.ecoflow_metrics import collect_ecoflow_samples
 from unifi_metrics.exporter import Handler, redact
 from unifi_metrics.metrics import collect_pdu_samples, render_prometheus
+from unifi_metrics.unifi_metrics import collect_unifi_device_samples
 
 
 class MetricsTest(unittest.TestCase):
@@ -39,7 +40,6 @@ class MetricsTest(unittest.TestCase):
             "pdu",
         )
         names = {sample.name for sample in samples}
-        self.assertIn("unifi_device_info", names)
         self.assertIn("unifi_pdu_state", names)
         self.assertIn("unifi_pdu_outlet_ac_power_consumption_watts", names)
         self.assertIn("unifi_pdu_outlet_power_watts", names)
@@ -190,6 +190,95 @@ class MetricsTest(unittest.TestCase):
         self.assertFalse(config.unifi_enabled)
         self.assertTrue(config.ecoflow_enabled)
         self.assertEqual(config.ecoflow_device_sns, ("abc", "def"))
+
+    def test_collects_curated_unifi_device_and_port_metrics(self) -> None:
+        samples = collect_unifi_device_samples(
+            [
+                {
+                    "mac": "aa",
+                    "name": "Switch",
+                    "model": "USW",
+                    "type": "usw",
+                    "version": "1.0",
+                    "state": 1,
+                    "uptime": 123,
+                    "system-stats": {"cpu": "4.5", "mem": "33.0"},
+                    "sys_stats": {"loadavg_1": "0.1", "mem_total": 1000, "mem_used": 500},
+                    "port_table": [
+                        {
+                            "port_idx": 1,
+                            "name": "Port 1",
+                            "media": "GE",
+                            "up": True,
+                            "enable": True,
+                            "speed": 1000,
+                            "rx_bytes": 10,
+                            "tx_bytes": 20,
+                            "poe_enable": True,
+                            "poe_good": True,
+                            "poe_power": "12.5",
+                            "poe_voltage": "54.1",
+                            "poe_current": "231.0",
+                        }
+                    ],
+                }
+            ]
+        )
+        values = {sample.name: sample.value for sample in samples}
+        self.assertEqual(values["unifi_device_up"], 1)
+        self.assertEqual(values["unifi_device_cpu_usage_percent"], 4.5)
+        self.assertEqual(values["unifi_switch_port_up"], 1)
+        self.assertEqual(values["unifi_switch_port_poe_power_watts"], 12.5)
+
+    def test_collects_curated_unifi_gateway_and_ap_metrics(self) -> None:
+        samples = collect_unifi_device_samples(
+            [
+                {
+                    "mac": "gw",
+                    "name": "Gateway",
+                    "model": "UDM",
+                    "type": "udm",
+                    "state": 1,
+                    "uplink": {
+                        "name": "eth9",
+                        "comment": "WAN",
+                        "ip": "192.0.2.10",
+                        "up": True,
+                        "latency": 4,
+                        "rx_bytes": 100,
+                        "tx_bytes": 200,
+                        "speed": 10000,
+                    },
+                },
+                {
+                    "mac": "ap",
+                    "name": "AP",
+                    "model": "U7",
+                    "type": "uap",
+                    "state": 1,
+                    "radio_table": [{"radio": "na", "name": "wifi1", "ht": "80", "nss": 4}],
+                    "vap_table": [
+                        {
+                            "radio": "na",
+                            "radio_name": "wifi1",
+                            "essid": "wifi",
+                            "usage": "user",
+                            "up": True,
+                            "num_sta": 7,
+                            "channel": 36,
+                            "bw": 80,
+                            "tx_power": 21,
+                            "rx_errors": 1,
+                        }
+                    ],
+                },
+            ]
+        )
+        values = {sample.name: sample.value for sample in samples}
+        self.assertEqual(values["unifi_gateway_wan_up"], 1)
+        self.assertEqual(values["unifi_gateway_wan_latency_ms"], 4)
+        self.assertEqual(values["unifi_ap_radio_channel_width_mhz"], 80)
+        self.assertEqual(values["unifi_ap_vap_clients"], 7)
 
 
 if __name__ == "__main__":

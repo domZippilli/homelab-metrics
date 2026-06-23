@@ -13,6 +13,7 @@ from .config import Config
 from .ecoflow_client import EcoFlowClient
 from .ecoflow_metrics import collect_ecoflow_samples, serial_from_device
 from .metrics import Sample, collect_pdu_samples, pdu_devices, render_samples
+from .unifi_metrics import collect_unifi_device_samples
 
 
 LOG = logging.getLogger("unifi_metrics")
@@ -74,7 +75,8 @@ class ScrapeCache:
         try:
             assert self.unifi_client
             self._unifi_devices = self.unifi_client.network_devices()
-            samples = collect_pdu_samples(self._unifi_devices, self.config.pdu_filter)
+            samples = collect_unifi_device_samples(self._unifi_devices)
+            samples.extend(collect_pdu_samples(self._unifi_devices, self.config.pdu_filter))
             samples.append(Sample("unifi_up", {}, 1.0))
             samples.append(Sample("unifi_scrape_duration_seconds", {}, time.monotonic() - started))
             return samples

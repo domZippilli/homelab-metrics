@@ -12,7 +12,15 @@ HELP = {
     "unifi_up": "Whether the last UniFi API scrape succeeded.",
     "unifi_scrape_duration_seconds": "Duration of the last UniFi API scrape.",
     "unifi_scrape_error": "Scrape error information, labeled by error type.",
-    "unifi_device_info": "Matched UniFi PDU device information.",
+    "unifi_device_info": "UniFi device information.",
+    "unifi_device_up": "Whether the UniFi device is connected.",
+    "unifi_device_uptime_seconds": "UniFi device uptime.",
+    "unifi_device_cpu_usage_percent": "UniFi device CPU usage.",
+    "unifi_device_memory_usage_percent": "UniFi device memory usage.",
+    "unifi_gateway_wan_up": "Whether the UniFi gateway WAN uplink is up.",
+    "unifi_switch_port_up": "Whether the UniFi switch port link is up.",
+    "unifi_switch_port_poe_power_watts": "UniFi switch port PoE power draw.",
+    "unifi_ap_vap_clients": "Connected clients on a UniFi AP virtual access point.",
     "unifi_pdu_outlet_relay_state": "Whether the UniFi PDU outlet relay is on.",
     "unifi_pdu_outlet_ac_power_consumption_watts": "Total UniFi PDU outlet AC power consumption.",
     "unifi_pdu_outlet_ac_power_budget_watts": "Total UniFi PDU outlet AC power budget.",
@@ -98,7 +106,6 @@ def collect_pdu_samples(devices: Iterable[dict[str, Any]], filter_regex: str) ->
     samples: list[Sample] = []
     for device in pdu_devices(devices, pattern):
         labels = device_labels(device)
-        samples.append(Sample("unifi_device_info", labels, 1.0))
         for key, value in sorted(device.items()):
             number = numeric_value(value)
             if number is not None:
