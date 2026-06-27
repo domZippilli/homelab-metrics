@@ -7,6 +7,7 @@ A small Prometheus exporter for homelab devices, currently supporting:
 - UniFi Protect camera/NVR/sensor status metrics.
 - EcoFlow cloud API device quota metrics.
 - ZFS pool status and scrub metrics from `zpool status`.
+- Intel GPU sysfs metrics from DRM, GT, and hwmon files.
 
 UniFi's local API is not formally stable. This exporter uses the local UniFi OS
 login flow and the Network application proxy endpoints, then exports numeric PDU
@@ -61,8 +62,6 @@ fields, for example `ecoflow_delta_pro_3_battery_soc_percent`,
 `ecoflow_delta_pro_3_output_power_watts`. Unknown quota fields still use the
 generic `ecoflow_quota_*` fallback.
 
-### Exporter
-
 ### ZFS
 
 | Variable | Default | Description |
@@ -72,6 +71,27 @@ generic `ecoflow_quota_*` fallback.
 
 The exporter shells out to `zpool list` and `zpool status -p`. If running in a
 container, the container needs access to ZFS tooling and host ZFS state.
+
+### GPU
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `INTEL_GPU_ENABLED` | `false` | Enable Intel GPU sysfs scraping |
+| `GPU_SYSFS_PATH` | `/sys/class/drm/card1` | DRM card path to scrape |
+
+The GPU collector reads sysfs files directly. It exports device identity, hwmon
+energy/voltage/power limits, GT frequency, RC6 residency, and throttle reason
+metrics when those files are present.
+
+If running in Docker, mount the relevant host sysfs path read-only, for example:
+
+```sh
+docker run --rm --env-file .env -p 9130:9130 \
+  -v /sys/class/drm/card1:/sys/class/drm/card1:ro \
+  homelab-metrics
+```
+
+### Exporter
 
 | Variable | Default | Description |
 | --- | --- | --- |

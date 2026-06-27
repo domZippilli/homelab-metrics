@@ -12,6 +12,7 @@ from .client import UnifiClient
 from .config import Config
 from .ecoflow_client import EcoFlowClient
 from .ecoflow_metrics import collect_ecoflow_samples, serial_from_device
+from .gpu_metrics import collect_gpu_samples
 from .metrics import Sample, collect_pdu_samples, pdu_devices, render_samples
 from .protect_metrics import collect_protect_samples
 from .unifi_metrics import collect_unifi_device_samples
@@ -70,6 +71,8 @@ class ScrapeCache:
             samples.extend(self._scrape_ecoflow(errors))
         if self.config.zfs_enabled:
             samples.extend(self._scrape_zfs(errors))
+        if self.config.intel_gpu_enabled:
+            samples.extend(self._scrape_gpu(errors))
         self._duration = time.monotonic() - started
         samples.append(Sample("homelab_scrape_duration_seconds", {}, self._duration))
         self._samples = samples
@@ -173,6 +176,28 @@ class ScrapeCache:
                 Sample("homelab_zfs_scrape_duration_seconds", {}, time.monotonic() - started),
                 Sample(
                     "homelab_zfs_scrape_error",
+                    {"type": exc.__class__.__name__, "message": str(exc)[:160]},
+                    1.0,
+                ),
+            ]
+
+    def _scrape_gpu(self, errors: dict[str, Exception]) -> list[Sample]:
+        started = time.monotonic()
+        try:
+            samples = collect_gpu_samples(self.config.gpu_sysfs_path)
+            samples.append(Sample("homelab_gpu_up", {}, 1.0))
+            samples.append(
+                Sample("homelab_gpu_scrape_duration_seconds", {}, time.monotonic() - started)
+            )
+            return samples
+        except Exception as exc:
+            LOG.warning("GPU sysfs scrape failed: %s", exc)
+            errors["gpu"] = exc
+            return [
+                Sample("homelab_gpu_up", {}, 0.0),
+                Sample("homelab_gpu_scrape_duration_seconds", {}, time.monotonic() - started),
+                Sample(
+                    "homelab_gpu_scrape_error",
                     {"type": exc.__class__.__name__, "message": str(exc)[:160]},
                     1.0,
                 ),

@@ -29,6 +29,8 @@ class Config:
     ecoflow_timeout_seconds: float = 15.0
     zfs_enabled: bool = False
     zfs_pools: tuple[str, ...] = ()
+    intel_gpu_enabled: bool = False
+    gpu_sysfs_path: str = "/sys/class/drm/card1"
     exporter_addr: str = "0.0.0.0"
     exporter_port: int = 9130
     scrape_ttl_seconds: float = 20.0
@@ -66,12 +68,19 @@ class Config:
             ecoflow_timeout_seconds=float(os.getenv("ECOFLOW_TIMEOUT_SECONDS", "15")),
             zfs_enabled=_bool_env("ZFS_ENABLED", False),
             zfs_pools=_csv_env("ZFS_POOLS"),
+            intel_gpu_enabled=_bool_env("INTEL_GPU_ENABLED", False),
+            gpu_sysfs_path=os.getenv("GPU_SYSFS_PATH", "/sys/class/drm/card1"),
             exporter_addr=os.getenv("EXPORTER_ADDR", "0.0.0.0"),
             exporter_port=int(os.getenv("EXPORTER_PORT", "9130")),
             scrape_ttl_seconds=float(os.getenv("SCRAPE_TTL_SECONDS", "20")),
         )
-        if not config.unifi_enabled and not config.ecoflow_enabled and not config.zfs_enabled:
-            raise ValueError("configure at least one source: UniFi, EcoFlow, or ZFS")
+        if (
+            not config.unifi_enabled
+            and not config.ecoflow_enabled
+            and not config.zfs_enabled
+            and not config.intel_gpu_enabled
+        ):
+            raise ValueError("configure at least one source: UniFi, EcoFlow, ZFS, or GPU")
         return config
 
 

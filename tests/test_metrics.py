@@ -1,10 +1,13 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from unifi_metrics.config import Config
 from unifi_metrics.ecoflow_client import flatten, sign_text, signature_text
 from unifi_metrics.ecoflow_metrics import collect_ecoflow_samples
 from unifi_metrics.exporter import Handler, redact
+from unifi_metrics.gpu_metrics import collect_gpu_samples
 from unifi_metrics.metrics import collect_pdu_samples, render_prometheus
 from unifi_metrics.protect_metrics import collect_protect_samples
 from unifi_metrics.unifi_metrics import collect_unifi_device_samples
@@ -201,6 +204,16 @@ class MetricsTest(unittest.TestCase):
         self.assertTrue(config.zfs_enabled)
         self.assertEqual(config.zfs_pools, ("tank", "backup"))
 
+    def test_config_allows_gpu_without_other_sources(self) -> None:
+        with patch("unifi_metrics.config.load_dotenv"), patch.dict(
+            "os.environ",
+            {"INTEL_GPU_ENABLED": "true", "GPU_SYSFS_PATH": "/host/sys/class/drm/card1"},
+            clear=True,
+        ):
+            config = Config.from_env()
+        self.assertTrue(config.intel_gpu_enabled)
+        self.assertEqual(config.gpu_sysfs_path, "/host/sys/class/drm/card1")
+
     def test_collects_curated_unifi_device_and_port_metrics(self) -> None:
         samples = collect_unifi_device_samples(
             [
@@ -330,6 +343,43 @@ errors: No known data errors
             ],
             3,
         )
+
+    def test_collects_gpu_sysfs_metrics(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            device = root / "card1" / "device"
+            gt = device / "drm" / "card1" / "gt" / "gt0"
+            hwmon = device / "hwmon" / "hwmon3"
+            gt.mkdir(parents=True)
+            hwmon.mkdir(parents=True)
+            for path, value in {
+                device / "vendor": "0x8086\n",
+                device / "device": "0x56a5\n",
+                device / "subsystem_device": "0x6004\n",
+                device / "revision": "0x05\n",
+                gt / "id": "0\n",
+                gt / "rps_cur_freq_mhz": "300\n",
+                gt / "rc6_residency_ms": "1500\n",
+                gt / "media_freq_factor": "128\n",
+                gt / "media_freq_factor.scale": "0.00390625\n",
+                gt / "throttle_reason_thermal": "1\n",
+                hwmon / "name": "i915\n",
+                hwmon / "energy1_input": "2500000\n",
+                hwmon / "in0_input": "745\n",
+                hwmon / "power1_max": "55000000\n",
+            }.items():
+                path.write_text(value, encoding="utf-8")
+
+            samples = collect_gpu_samples(str(root / "card1"))
+
+        values = {sample.name: sample.value for sample in samples}
+        self.assertEqual(values["homelab_gpu_info"], 1)
+        self.assertEqual(values["homelab_gpu_rps_current_frequency_mhz"], 300)
+        self.assertEqual(values["homelab_gpu_rc6_residency_seconds_total"], 1.5)
+        self.assertEqual(values["homelab_gpu_energy_joules_total"], 2.5)
+        self.assertEqual(values["homelab_gpu_voltage_volts"], 0.745)
+        self.assertEqual(values["homelab_gpu_power_limit_watts"], 55)
+        self.assertEqual(values["homelab_gpu_media_frequency_factor_scaled"], 0.5)
 
     def test_collects_unifi_protect_camera_metrics(self) -> None:
         samples = collect_protect_samples(
