@@ -6,6 +6,7 @@ from unifi_metrics.ecoflow_client import flatten, sign_text, signature_text
 from unifi_metrics.ecoflow_metrics import collect_ecoflow_samples
 from unifi_metrics.exporter import Handler, redact
 from unifi_metrics.metrics import collect_pdu_samples, render_prometheus
+from unifi_metrics.protect_metrics import collect_protect_samples
 from unifi_metrics.unifi_metrics import collect_unifi_device_samples
 from unifi_metrics.zfs_status import parse_zpool_status
 
@@ -329,6 +330,126 @@ errors: No known data errors
             ],
             3,
         )
+
+    def test_collects_unifi_protect_camera_metrics(self) -> None:
+        samples = collect_protect_samples(
+            {
+                "nvr": {
+                    "id": "nvr1",
+                    "name": "UDM Protect",
+                    "modelKey": "UDMPROMAX",
+                    "version": "5.2.0",
+                    "upSince": 1782500100000,
+                    "lastSeen": 1782500200000,
+                    "isRecording": True,
+                    "isRecordingDisabled": False,
+                    "isRecordingMotionOnly": True,
+                    "cameraCount": 1,
+                    "cameraUtilization": 12.5,
+                    "systemInfo": {
+                        "cpu": {"averageLoad": 4.2, "temperature": 48},
+                        "memory": {"available": 1000, "free": 500, "total": 2000},
+                    },
+                    "storageStats": {"recordingSpace": {"used": 10, "available": 20, "total": 30}},
+                },
+                "cameras": [
+                    {
+                        "id": "cam1",
+                        "name": "Front Door",
+                        "modelKey": "G5Bullet",
+                        "mac": "aa:bb",
+                        "host": "192.168.0.10",
+                        "isConnected": True,
+                        "isRecording": True,
+                        "isMotionDetected": False,
+                        "lastSeen": 1782500000000,
+                        "connectedSince": 1782490000000,
+                        "lastMotion": 1782499900,
+                        "wirelessConnectionState": {
+                            "signalState": {"signalQuality": 92, "signalStrength": -58},
+                            "batteryStatus": {"percentage": 87},
+                        },
+                    }
+                ],
+            }
+        )
+        values = {sample.name: sample.value for sample in samples}
+        self.assertEqual(values["unifi_protect_nvr_info"], 1)
+        self.assertEqual(values["unifi_protect_nvr_up_since_timestamp_seconds"], 1782500100)
+        self.assertEqual(values["unifi_protect_nvr_last_seen_timestamp_seconds"], 1782500200)
+        self.assertEqual(values["unifi_protect_nvr_is_recording"], 1)
+        self.assertEqual(values["unifi_protect_nvr_recording_disabled"], 0)
+        self.assertEqual(values["unifi_protect_nvr_recording_motion_only"], 1)
+        self.assertEqual(values["unifi_protect_nvr_disk_used_bytes"], 10)
+        self.assertEqual(values["unifi_protect_nvr_cpu_load_percent"], 4.2)
+        self.assertEqual(values["unifi_protect_nvr_memory_total_kilobytes"], 2000)
+        self.assertEqual(values["unifi_protect_nvr_camera_utilization_percent"], 12.5)
+        self.assertEqual(values["unifi_protect_camera_connected"], 1)
+        self.assertEqual(values["unifi_protect_camera_recording_enabled"], 1)
+        self.assertEqual(values["unifi_protect_camera_motion_detected"], 0)
+        self.assertEqual(values["unifi_protect_camera_last_seen_timestamp_seconds"], 1782500000)
+        self.assertEqual(values["unifi_protect_camera_connected_since_timestamp_seconds"], 1782490000)
+        self.assertEqual(values["unifi_protect_camera_wifi_signal_quality"], 92)
+        self.assertEqual(values["unifi_protect_camera_wifi_signal_strength_dbm"], -58)
+        self.assertEqual(values["unifi_protect_camera_battery_percent"], 87)
+
+    def test_collects_unifi_protect_sensor_and_light_metrics(self) -> None:
+        samples = collect_protect_samples(
+            {
+                "lights": [
+                    {
+                        "id": "light1",
+                        "name": "Driveway",
+                        "isConnected": True,
+                        "isLightOn": False,
+                        "lightDeviceSettings": {"ledLevel": 75},
+                    }
+                ],
+                "sensors": [
+                    {
+                        "id": "sensor1",
+                        "name": "Door",
+                        "isConnected": True,
+                        "isUpdating": False,
+                        "isOpened": True,
+                        "isMotionDetected": True,
+                        "upSince": 1782500100000,
+                        "lastSeen": 1782500200000,
+                        "connectedSince": 1782500000000,
+                        "motionDetectedAt": 1782499900000,
+                        "tamperingDetectedAt": 1782499800000,
+                        "stats": {
+                            "temperature": {"value": "21.5"},
+                            "humidity": {"value": 40},
+                            "light": {"value": 7},
+                        },
+                        "wirelessConnectionState": {
+                            "signalState": {"signalQuality": 92, "signalStrength": -58},
+                            "batteryStatus": {"percentage": 88, "isLow": False},
+                        },
+                    }
+                ],
+            }
+        )
+        values = {sample.name: sample.value for sample in samples}
+        self.assertEqual(values["unifi_protect_light_connected"], 1)
+        self.assertEqual(values["unifi_protect_light_on"], 0)
+        self.assertEqual(values["unifi_protect_light_brightness_percent"], 75)
+        self.assertEqual(values["unifi_protect_sensor_open"], 1)
+        self.assertEqual(values["unifi_protect_sensor_motion_detected"], 1)
+        self.assertEqual(values["unifi_protect_sensor_updating"], 0)
+        self.assertEqual(values["unifi_protect_sensor_up_since_timestamp_seconds"], 1782500100)
+        self.assertEqual(values["unifi_protect_sensor_last_seen_timestamp_seconds"], 1782500200)
+        self.assertEqual(values["unifi_protect_sensor_connected_since_timestamp_seconds"], 1782500000)
+        self.assertEqual(values["unifi_protect_sensor_motion_detected_at_timestamp_seconds"], 1782499900)
+        self.assertEqual(values["unifi_protect_sensor_temperature_celsius"], 21.5)
+        self.assertEqual(values["unifi_protect_sensor_humidity_percent"], 40)
+        self.assertEqual(values["unifi_protect_sensor_light_lux"], 7)
+        self.assertEqual(values["unifi_protect_sensor_battery_percent"], 88)
+        self.assertEqual(values["unifi_protect_sensor_battery_low"], 0)
+        self.assertEqual(values["unifi_protect_sensor_signal_quality"], 92)
+        self.assertEqual(values["unifi_protect_sensor_signal_strength_dbm"], -58)
+        self.assertEqual(values["unifi_protect_sensor_tampering_detected_at_timestamp_seconds"], 1782499800)
 
 
 if __name__ == "__main__":

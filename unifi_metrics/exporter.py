@@ -13,6 +13,7 @@ from .config import Config
 from .ecoflow_client import EcoFlowClient
 from .ecoflow_metrics import collect_ecoflow_samples, serial_from_device
 from .metrics import Sample, collect_pdu_samples, pdu_devices, render_samples
+from .protect_metrics import collect_protect_samples
 from .unifi_metrics import collect_unifi_device_samples
 from .zfs_status import collect_zfs_status_samples
 
@@ -46,6 +47,7 @@ class ScrapeCache:
             )
         self._expires_at = 0.0
         self._unifi_devices: list[dict[str, Any]] = []
+        self._protect_bootstrap: dict[str, Any] = {}
         self._ecoflow_devices: list[dict[str, Any]] = []
         self._ecoflow_quotas: dict[str, dict[str, Any]] = {}
         self._errors: dict[str, Exception] = {}
@@ -62,6 +64,8 @@ class ScrapeCache:
         errors: dict[str, Exception] = {}
         if self.unifi_client:
             samples.extend(self._scrape_unifi(errors))
+            if self.config.protect_enabled:
+                samples.extend(self._scrape_protect(errors))
         if self.ecoflow_client:
             samples.extend(self._scrape_ecoflow(errors))
         if self.config.zfs_enabled:
@@ -91,6 +95,30 @@ class ScrapeCache:
                 Sample("unifi_scrape_duration_seconds", {}, time.monotonic() - started),
                 Sample(
                     "unifi_scrape_error",
+                    {"type": exc.__class__.__name__, "message": str(exc)[:160]},
+                    1.0,
+                ),
+            ]
+
+    def _scrape_protect(self, errors: dict[str, Exception]) -> list[Sample]:
+        started = time.monotonic()
+        try:
+            assert self.unifi_client
+            self._protect_bootstrap = self.unifi_client.protect_bootstrap()
+            samples = collect_protect_samples(self._protect_bootstrap)
+            samples.append(Sample("unifi_protect_up", {}, 1.0))
+            samples.append(
+                Sample("unifi_protect_scrape_duration_seconds", {}, time.monotonic() - started)
+            )
+            return samples
+        except Exception as exc:
+            LOG.warning("UniFi Protect scrape failed: %s", exc)
+            errors["protect"] = exc
+            return [
+                Sample("unifi_protect_up", {}, 0.0),
+                Sample("unifi_protect_scrape_duration_seconds", {}, time.monotonic() - started),
+                Sample(
+                    "unifi_protect_scrape_error",
                     {"type": exc.__class__.__name__, "message": str(exc)[:160]},
                     1.0,
                 ),
@@ -154,6 +182,10 @@ class ScrapeCache:
         self.scrape()
         return self._unifi_devices, self._errors.get("unifi")
 
+    def protect_debug(self) -> tuple[dict[str, Any], Exception | None]:
+        self.scrape()
+        return self._protect_bootstrap, self._errors.get("protect")
+
     def ecoflow_debug(self) -> tuple[dict[str, Any], Exception | None]:
         self.scrape()
         body = {"devices": self._ecoflow_devices, "quotas": self._ecoflow_quotas}
@@ -180,6 +212,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/debug/ecoflow":
             self._debug_ecoflow()
             return
+        if path == "/debug/protect":
+            self._debug_protect()
+            return
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def log_message(self, fmt: str, *args: Any) -> None:
@@ -204,6 +239,7 @@ class Handler(BaseHTTPRequestHandler):
     <li><a href="/healthz">/healthz</a></li>
     <li><a href="/debug/devices">/debug/devices</a></li>
     <li><a href="/debug/ecoflow">/debug/ecoflow</a></li>
+    <li><a href="/debug/protect">/debug/protect</a></li>
   </ul>
 </body>
 </html>
@@ -221,6 +257,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def _debug_ecoflow(self) -> None:
         body, error = self.cache.ecoflow_debug()
+        if error:
+            self.send_error(HTTPStatus.BAD_GATEWAY, str(error))
+            return
+        self._send_text(f"{json.dumps(redact(body), indent=2, sort_keys=True)}\n", "application/json")
+
+    def _debug_protect(self) -> None:
+        body, error = self.cache.protect_debug()
         if error:
             self.send_error(HTTPStatus.BAD_GATEWAY, str(error))
             return

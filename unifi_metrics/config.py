@@ -21,6 +21,7 @@ class Config:
     verify_ssl: bool = False
     timeout_seconds: float = 15.0
     pdu_filter: str = r"pdu|usp-pdu|smartpower|power strip|outlet"
+    protect_enabled: bool = False
     ecoflow_host: str = "https://api.ecoflow.com"
     ecoflow_access_key: str | None = None
     ecoflow_secret_key: str | None = None
@@ -53,6 +54,7 @@ class Config:
             pdu_filter=os.getenv(
                 "UNIFI_PDU_FILTER", r"pdu|usp-pdu|smartpower|power strip|outlet"
             ),
+            protect_enabled=_bool_env("UNIFI_PROTECT_ENABLED", False),
             ecoflow_host=os.getenv("ECOFLOW_HOST", "https://api.ecoflow.com").rstrip("/"),
             ecoflow_access_key=os.getenv("ECOFLOW_ACCESS_KEY")
             or os.getenv("ECOFLOW_API_KEY")

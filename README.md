@@ -4,6 +4,7 @@ A small Prometheus exporter for homelab devices, currently supporting:
 
 - UniFi OS / Network device metrics, initially aimed at UDM Pro setups with
   UniFi SmartPower / PDU devices.
+- UniFi Protect camera/NVR/sensor status metrics.
 - EcoFlow cloud API device quota metrics.
 - ZFS pool status and scrub metrics from `zpool status`.
 
@@ -32,6 +33,11 @@ Set environment variables for at least one source.
 | `UNIFI_VERIFY_SSL` | `false` | Verify TLS certificates |
 | `UNIFI_TIMEOUT_SECONDS` | `15` | API timeout |
 | `UNIFI_PDU_FILTER` | `pdu|usp-pdu|smartpower|power strip|outlet` | Regex used against model/name/type |
+| `UNIFI_PROTECT_ENABLED` | `false` | Enable UniFi Protect scraping with the same local UniFi OS account |
+
+The local UniFi OS account must have Protect permissions, such as Protect Viewer
+access. Without that, Protect endpoints return HTTP 403 while Network metrics
+continue to work.
 
 ### EcoFlow
 
@@ -88,6 +94,7 @@ The exporter serves:
 - `GET /healthz` for a simple health check.
 - `GET /debug/devices` for a redacted JSON view of devices matched as PDUs.
 - `GET /debug/ecoflow` for a redacted JSON view of EcoFlow devices and quotas.
+- `GET /debug/protect` for a redacted JSON view of UniFi Protect bootstrap data.
 
 ## Prometheus scrape config
 

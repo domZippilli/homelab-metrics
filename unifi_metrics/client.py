@@ -59,6 +59,11 @@ class UnifiClient:
             raise UnifiApiError("unexpected device response: missing data list")
         return [item for item in data if isinstance(item, dict)]
 
+    def protect_bootstrap(self) -> dict[str, Any]:
+        if not self._logged_in:
+            self.login()
+        return self._request("GET", "/proxy/protect/api/bootstrap", None)
+
     def _request(
         self,
         method: str,
